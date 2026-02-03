@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
+// Force dynamic rendering
+export const dynamic = "force-dynamic";
+
 const SETTINGS_ID = "global";
 
 /**
