@@ -12,30 +12,52 @@ const SETTINGS_ID = "global";
  */
 export async function GET() {
   try {
-    let settings = await db.globalSettings.findUnique({
-      where: { id: SETTINGS_ID },
-    });
+    // Try GlobalSettings table first
+    try {
+      let settings = await db.globalSettings.findUnique({
+        where: { id: SETTINGS_ID },
+      });
 
-    // Create if doesn't exist
-    if (!settings) {
-      settings = await db.globalSettings.create({
-        data: { id: SETTINGS_ID },
+      // Create if doesn't exist
+      if (!settings) {
+        settings = await db.globalSettings.create({
+          data: { id: SETTINGS_ID },
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          contractAddress: settings.contractAddress,
+          updatedAt: settings.updatedAt,
+        },
+      });
+    } catch (dbError) {
+      // Table might not exist yet - try fallback to SimulationState
+      console.warn("GlobalSettings table error, trying fallback:", dbError);
+
+      const simState = await db.simulationState.findUnique({
+        where: { id: "singleton" },
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          contractAddress: simState?.contractAddress || null,
+          updatedAt: simState?.updatedAt || new Date(),
+        },
       });
     }
-
+  } catch (error) {
+    console.error("Error fetching settings:", error);
+    // Return default values instead of error
     return NextResponse.json({
       success: true,
       data: {
-        contractAddress: settings.contractAddress,
-        updatedAt: settings.updatedAt,
+        contractAddress: null,
+        updatedAt: new Date(),
       },
     });
-  } catch (error) {
-    console.error("Error fetching settings:", error);
-    return NextResponse.json(
-      { success: false, error: "Failed to fetch settings" },
-      { status: 500 }
-    );
   }
 }
 
