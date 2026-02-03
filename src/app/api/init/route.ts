@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { AgentService } from "@/lib/services/agent";
 import { ActivityService } from "@/lib/services/activity";
 import { generateUniqueAgentName } from "@/lib/simulation/names";
+import { generateWeightedTaskBatch } from "@/lib/simulation/tasks";
 import { serializeForJson } from "@/lib/utils";
 import type { AgentRole } from "@/types";
 
@@ -88,17 +89,69 @@ export async function POST(request: NextRequest) {
         genesisFunding
       );
     } catch (activityError) {
-      // Activity logging is non-critical
       console.warn("[INIT] Failed to log genesis activity:", activityError);
     }
 
-    console.log(`[INIT] Created genesis agent: ${genesisName}`);
+    // Create initial tasks for the genesis agent
+    let tasksCreated = 0;
+    try {
+      const taskTemplates = generateWeightedTaskBatch(5); // Create 5 initial tasks
+      for (const template of taskTemplates) {
+        const task = await db.task.create({
+          data: {
+            ...template,
+            posterId: genesisAgent.id,
+            status: "OPEN",
+          },
+        });
+        await ActivityService.logTaskCreated(
+          genesisAgent.id,
+          genesisName,
+          task.id,
+          task.title,
+          task.category,
+          task.reward
+        );
+        tasksCreated++;
+      }
+    } catch (taskError) {
+      console.warn("[INIT] Failed to create initial tasks:", taskError);
+    }
+
+    // Create leaderboard entry
+    try {
+      await db.leaderboardCache.upsert({
+        where: { agentId: genesisAgent.id },
+        create: {
+          agentId: genesisAgent.id,
+          rankByEarnings: 1,
+          rankByReliability: 1,
+          rankByLongevity: 1,
+          rankBySuccessRate: 1,
+          agentName: genesisName,
+          agentRole: genesisRole,
+          agentStatus: "ACTIVE",
+          totalEarnings: 0n,
+          reliability: 500,
+          activeDays: 0,
+          successRate: 0,
+          tier: "NEWCOMER",
+          currentStreak: 0,
+        },
+        update: {},
+      });
+    } catch (lbError) {
+      console.warn("[INIT] Failed to create leaderboard entry:", lbError);
+    }
+
+    console.log(`[INIT] Created genesis agent: ${genesisName} with ${tasksCreated} tasks`);
 
     return NextResponse.json({
       success: true,
       initialized: true,
-      message: "System initialized with genesis agent",
+      message: `System initialized with genesis agent and ${tasksCreated} tasks`,
       agentCount: 1,
+      tasksCreated,
       genesisAgent: serializeForJson({
         id: genesisAgent.id,
         name: genesisAgent.name,
@@ -119,18 +172,22 @@ export async function POST(request: NextRequest) {
 
 /**
  * GET /api/init
- * Check initialization status
+ * Check initialization status and database counts
  */
 export async function GET() {
   try {
-    const agentCount = await db.agent.count({
-      where: { status: "ACTIVE" },
-    });
+    const [agentCount, taskCount, openTaskCount] = await Promise.all([
+      db.agent.count({ where: { status: "ACTIVE" } }),
+      db.task.count(),
+      db.task.count({ where: { status: "OPEN" } }),
+    ]);
 
     return NextResponse.json({
       success: true,
       initialized: agentCount > 0,
       agentCount,
+      taskCount,
+      openTaskCount,
     });
   } catch (error) {
     console.error("Error checking init status:", error);
