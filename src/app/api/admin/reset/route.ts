@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { AgentService } from "@/lib/services/agent";
+import { ActivityService } from "@/lib/services/activity";
+import { generateUniqueAgentName } from "@/lib/simulation/names";
+import { generateWeightedTaskBatch } from "@/lib/simulation/tasks";
+import type { AgentRole } from "@/types";
 
 /**
  * POST /api/admin/reset
- * Reset all agents and simulation data while preserving wallet records
+ * Reset all agents and simulation data and start fresh with 1 agent
  */
 export async function POST(request: NextRequest) {
   try {
@@ -71,23 +76,102 @@ export async function POST(request: NextRequest) {
     console.log("[RESET] Clearing agents...");
     await db.agent.deleteMany();
 
-    // Reinitialize simulation state
+    // Reinitialize simulation state with reset spawn timer
     console.log("[RESET] Reinitializing simulation state...");
     await db.simulationState.create({
       data: {
         id: "singleton",
         isPaused: false,
         tickCount: 0,
+        lastAgentSpawnAt: null, // Reset spawn timer so next tick can spawn
+        lastTaskBatchAt: null,
+        lastLeaderboardUpdate: null,
+        firstCapReachedAt: null,
       },
     });
 
-    console.log("[RESET] Reset complete!");
+    // Create the first agent (Genesis Agent)
+    console.log("[RESET] Creating genesis agent...");
+    const genesisName = generateUniqueAgentName();
+    const genesisRole: AgentRole = "ORCHESTRATOR";
+    const genesisFunding = BigInt(50000); // 50K CLAW initial funding
+
+    const genesisAgent = await AgentService.create({
+      name: genesisName,
+      role: genesisRole,
+      config: {
+        allowedCategories: ["COMPUTATION", "VALIDATION", "ANALYSIS", "GENERATION", "ORCHESTRATION", "RESEARCH"],
+        maxBidAmount: 10000,
+        minReputationRequired: 0,
+        synthetic: true,
+      },
+      initialFunding: genesisFunding,
+    });
+
+    // Log the genesis event
+    await ActivityService.logAgentDeployed(
+      genesisAgent.id,
+      genesisName,
+      genesisRole,
+      genesisFunding
+    );
+
+    // Create initial tasks for the genesis agent
+    let tasksCreated = 0;
+    const taskTemplates = generateWeightedTaskBatch(3); // Create 3 initial tasks
+    for (const template of taskTemplates) {
+      const task = await db.task.create({
+        data: {
+          ...template,
+          posterId: genesisAgent.id,
+          status: "OPEN",
+        },
+      });
+      await ActivityService.logTaskCreated(
+        genesisAgent.id,
+        genesisName,
+        task.id,
+        task.title,
+        task.category,
+        task.reward
+      );
+      tasksCreated++;
+    }
+
+    // Create leaderboard entry
+    await db.leaderboardCache.create({
+      data: {
+        agentId: genesisAgent.id,
+        rankByEarnings: 1,
+        rankByReliability: 1,
+        rankByLongevity: 1,
+        rankBySuccessRate: 1,
+        agentName: genesisName,
+        agentRole: genesisRole,
+        agentStatus: "ACTIVE",
+        totalEarnings: 0n,
+        reliability: 500,
+        activeDays: 0,
+        successRate: 0,
+        tier: "NEWCOMER",
+        currentStreak: 0,
+      },
+    });
+
+    console.log(`[RESET] Reset complete! Created genesis agent: ${genesisName} with ${tasksCreated} tasks`);
 
     return NextResponse.json({
       success: true,
-      message: "Reset complete",
+      message: `Reset complete. Started fresh with 1 agent (${genesisName}) and ${tasksCreated} tasks. New agent will spawn every 2 minutes.`,
       data: {
         walletsBackedUp: walletBackup.length,
+        genesisAgent: {
+          id: genesisAgent.id,
+          name: genesisName,
+          role: genesisRole,
+          funding: genesisFunding.toString(),
+        },
+        tasksCreated,
         wallets: keepWallets ? walletBackup.map(w => ({
           agentName: w.agent?.name || "Unknown",
           role: w.agent?.role || "Unknown",
