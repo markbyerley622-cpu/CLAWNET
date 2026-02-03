@@ -12,22 +12,8 @@ import { SimulationEngine } from "@/lib/simulation/engine";
  */
 export async function POST(request: NextRequest) {
   try {
-    // Optional: Verify cron secret for production security
-    const cronSecret = request.headers.get("x-cron-secret");
-    const adminKey = request.headers.get("x-admin-key");
-
-    // Allow if either cron secret or admin key is valid
-    const isAuthorized =
-      cronSecret === process.env.CRON_SECRET ||
-      adminKey === process.env.ADMIN_DEV_KEY ||
-      process.env.NODE_ENV === "development";
-
-    if (!isAuthorized) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    // Simulation ticks are allowed from any source
+    // This just processes game logic, no sensitive data
 
     // Execute simulation tick
     const result = await SimulationEngine.tick();

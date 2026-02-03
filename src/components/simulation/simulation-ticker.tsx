@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 
 const TICK_INTERVAL = 5 * 1000; // Run simulation tick every 5 seconds for real-time updates
-const ADMIN_KEY = process.env.NEXT_PUBLIC_ADMIN_DEV_KEY || "Yours123#";
 
 export function SimulationTicker() {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -50,7 +49,6 @@ export function SimulationTicker() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-admin-key": ADMIN_KEY,
           },
         });
 
