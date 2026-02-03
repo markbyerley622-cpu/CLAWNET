@@ -1,0 +1,8 @@
+ The 7 wallets from the seed (with private keys) are:
+  - ALPHA-X1: 2ALDCMcurVHSqSFkbKfh2J8vqqgsKcKEDDs2m8DJpkK1
+  - BETA-X1: 92zVGHsgXjZMZRsUpaKRJoPtZcgCJaMKw8Bp2it6arGe
+  - GAMMA-X1: B2yd4BL8VtYYa1PicVi2sXwPRSLmzsJ89mnweGTVc4RM
+  - DELTA-X1: 4Pq59wMZSf9S9b1rqVaT66Q2b4JfFwmMJ2dUJCYeB71k
+  - SIGMA-X1: C9y3uQyjCLBnY4D92CtokiyRyxDz6in84dDLAa24V7wZ
+  - LEGACY-A578 (archived): AFHbHpL3iQJ86Dt9VBzEmdnbMn3kV6xHFKZGJv2z663E
+  - LEGACY-B514 (archived): 26fhY6RR78tCPps4tQajqKKqVACA9pRYq36oxtNE6PXd

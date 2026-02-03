@@ -1,0 +1,397 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// AGENT
+// =============================================================================
+
+model Agent {
+  id        String      @id @default(uuid())
+  name      String
+  role      AgentRole
+  status    AgentStatus @default(ACTIVE)
+
+  // Owner's wallet address (who deployed this agent)
+  ownerWalletAddress String?
+
+  // Configuration (JSON for flexibility)
+  config    Json        @default("{}")
+
+  // Relations
+  wallet    Wallet?
+  reputation ReputationScore?
+
+  postedTasks   Task[] @relation("TaskPoster")
+  assignedTasks Task[] @relation("TaskAssignee")
+  bids          Bid[]
+
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  archivedAt  DateTime?
+
+  @@index([status])
+  @@index([role])
+  @@index([createdAt])
+  @@index([ownerWalletAddress])
+}
+
+enum AgentRole {
+  COMPUTE
+  VALIDATOR
+  ANALYST
+  CREATIVE
+  ORCHESTRATOR
+  SPECIALIST
+}
+
+enum AgentStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+// =============================================================================
+// WALLET
+// =============================================================================
+
+model Wallet {
+  id              String   @id @default(uuid())
+
+  agentId         String   @unique
+  agent           Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Balances (stored as BigInt for precision)
+  balance         BigInt   @default(0)
+  escrowedBalance BigInt   @default(0)
+  totalEarned     BigInt   @default(0)
+  totalSpent      BigInt   @default(0)
+
+  // Solana integration
+  solanaAddress   String?  @unique
+  privateKey      String?  // DEV ONLY - stored for testing
+
+  // Relations
+  transactions    Transaction[]
+
+  // Timestamps
+  createdAt       DateTime @default(now())
+  lastActivityAt  DateTime @default(now())
+
+  @@index([solanaAddress])
+}
+
+model Transaction {
+  id                   String          @id @default(uuid())
+
+  walletId             String
+  wallet               Wallet          @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  type                 TransactionType
+  amount               BigInt
+  direction            TransactionDirection
+
+  // Context
+  taskId               String?
+  task                 Task?           @relation(fields: [taskId], references: [id])
+  counterpartyWalletId String?
+
+  description          String
+
+  // Solana (Phase 2)
+  solanaSignature      String?
+
+  createdAt            DateTime        @default(now())
+
+  @@index([walletId, createdAt])
+  @@index([taskId])
+}
+
+enum TransactionType {
+  FUNDING
+  TASK_DEPOSIT
+  TASK_REWARD
+  TASK_REFUND
+  TASK_SLASH
+  PLATFORM_FEE
+  SUBTASK_PAYMENT
+}
+
+enum TransactionDirection {
+  CREDIT
+  DEBIT
+}
+
+// =============================================================================
+// TASK
+// =============================================================================
+
+model Task {
+  id                    String       @id @default(uuid())
+
+  title                 String
+  description           String
+  category              TaskCategory
+  difficulty            Int          @default(3) // 1-5
+
+  // Task specification (JSON)
+  schema                Json         @default("{}")
+  validationLogic       String       @default("{\"type\":\"schema\"}")
+
+  // Requirements
+  requiredReputation    Int          @default(0)
+
+  // Economics
+  reward                BigInt
+  depositRequired       BigInt
+  slashPercentage       Int          @default(20) // 0-100
+  riskRating            RiskRating   @default(MEDIUM)
+
+  // Timing
+  executionWindowMinutes Int         @default(120)
+  expiresAt             DateTime
+
+  // State
+  status                TaskStatus   @default(OPEN)
+
+  // Relations
+  posterId              String
+  poster                Agent        @relation("TaskPoster", fields: [posterId], references: [id])
+
+  assignedAgentId       String?
+  assignedAgent         Agent?       @relation("TaskAssignee", fields: [assignedAgentId], references: [id])
+
+  bids                  Bid[]
+  transactions          Transaction[]
+  reputationEvents      ReputationEvent[]
+  submission            TaskSubmission?
+
+  // Timestamps
+  createdAt             DateTime     @default(now())
+  acceptedAt            DateTime?
+  completedAt           DateTime?
+
+  @@index([status, category])
+  @@index([posterId])
+  @@index([assignedAgentId])
+  @@index([expiresAt])
+  @@index([createdAt])
+}
+
+model TaskSubmission {
+  id          String   @id @default(uuid())
+
+  taskId      String   @unique
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  output      Json
+  submittedAt DateTime @default(now())
+
+  // Validation result
+  validationPassed Boolean?
+  validationScore  Int?
+  validationErrors Json?
+}
+
+enum TaskCategory {
+  COMPUTATION
+  VALIDATION
+  ANALYSIS
+  GENERATION
+  ORCHESTRATION
+  RESEARCH
+}
+
+enum TaskStatus {
+  OPEN
+  ASSIGNED
+  PENDING_VALIDATION
+  COMPLETED
+  FAILED
+  EXPIRED
+  CANCELLED
+}
+
+enum RiskRating {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// =============================================================================
+// BID
+// =============================================================================
+
+model Bid {
+  id              String    @id @default(uuid())
+
+  taskId          String
+  task            Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  agentId         String
+  agent           Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  proposedReward  BigInt
+  estimatedDuration Int     // minutes
+  message         String    @default("")
+
+  status          BidStatus @default(PENDING)
+
+  createdAt       DateTime  @default(now())
+  respondedAt     DateTime?
+
+  @@unique([taskId, agentId])
+  @@index([agentId])
+  @@index([status])
+}
+
+enum BidStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+// =============================================================================
+// REPUTATION
+// =============================================================================
+
+model ReputationScore {
+  agentId           String   @id
+  agent             Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Component scores (0-1000)
+  reliability       Int      @default(500)
+  quality           Int      @default(500)
+  speed             Int      @default(500)
+  overall           Int      @default(500)
+
+  tier              ReputationTier @default(NEWCOMER)
+
+  // Statistics
+  tasksCompleted    Int      @default(0)
+  tasksFailed       Int      @default(0)
+  totalTasksAttempted Int    @default(0)
+
+  // Streaks
+  currentStreak     Int      @default(0)
+  longestStreak     Int      @default(0)
+
+  // Timestamps
+  lastTaskAt        DateTime?
+  lastUpdatedAt     DateTime @default(now())
+
+  // Relations
+  events            ReputationEvent[]
+
+  @@index([overall])
+  @@index([tier])
+}
+
+model ReputationEvent {
+  id          String              @id @default(uuid())
+
+  agentId     String
+  reputation  ReputationScore     @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
+
+  eventType   ReputationEventType
+  delta       Int
+  reason      String
+
+  taskId      String?
+  task        Task?               @relation(fields: [taskId], references: [id])
+
+  scoreBefore Int
+  scoreAfter  Int
+
+  createdAt   DateTime            @default(now())
+
+  @@index([agentId, createdAt])
+}
+
+enum ReputationTier {
+  UNTRUSTED   // 0-199
+  NEWCOMER    // 200-399
+  RELIABLE    // 400-599
+  TRUSTED     // 600-799
+  ELITE       // 800-899
+  LEGENDARY   // 900+
+}
+
+enum ReputationEventType {
+  TASK_SUCCESS
+  TASK_FAILURE
+  TASK_TIMEOUT
+  INACTIVITY_DECAY
+  BONUS_STREAK
+  PENALTY_ABANDON
+}
+
+// =============================================================================
+// LEADERBOARD (Cached)
+// =============================================================================
+
+model LeaderboardCache {
+  agentId           String   @id
+
+  rankByEarnings    Int
+  rankByReliability Int
+  rankByLongevity   Int
+  rankBySuccessRate Int
+
+  // Denormalized for performance
+  agentName         String
+  agentRole         AgentRole
+  agentStatus       AgentStatus
+
+  totalEarnings     BigInt
+  reliability       Int
+  activeDays        Int
+  successRate       Float
+
+  tier              ReputationTier
+  currentStreak     Int
+
+  updatedAt         DateTime @default(now())
+
+  @@index([rankByEarnings])
+  @@index([rankByReliability])
+  @@index([rankByLongevity])
+  @@index([rankBySuccessRate])
+}
+
+// =============================================================================
+// ACTIVITY EVENTS (Live Ticker)
+// =============================================================================
+
+model ActivityEvent {
+  id        String   @id @default(uuid())
+  type      String   // task_completed, agent_deployed, bid_placed, etc.
+  data      Json     // Event-specific data
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([type])
+}
+
+// =============================================================================
+// SIMULATION STATE
+// =============================================================================
+
+model SimulationState {
+  id                    String   @id @default("singleton")
+  lastAgentSpawnAt      DateTime?
+  lastTaskBatchAt       DateTime?
+  lastLeaderboardUpdate DateTime?
+  firstCapReachedAt     DateTime?  // When 200 agents was first reached
+  isPaused              Boolean  @default(false)
+  tickCount             Int      @default(0)
+  updatedAt             DateTime @default(now())
+}
