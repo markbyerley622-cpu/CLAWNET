@@ -1,24 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-
-const REFRESH_INTERVAL = 10000; // 10 seconds when visible
-const BACKGROUND_REFRESH_INTERVAL = 60000; // 60 seconds when hidden
+import { useDataRefresh, useDataSync } from "@/components/data/data-sync-provider";
 
 export function LiveTerminal() {
   const [agentCount, setAgentCount] = useState<number | null>(null);
-  const [isVisible, setIsVisible] = useState(true);
   const [error, setError] = useState(false);
-
-  // Track page visibility
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      setIsVisible(document.visibilityState === "visible");
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, []);
+  const lastAgentUpdate = useDataRefresh("agents");
+  const { isPageVisible } = useDataSync();
 
   const fetchCount = useCallback(async (signal: AbortSignal) => {
     try {
@@ -33,23 +22,12 @@ export function LiveTerminal() {
     }
   }, []);
 
+  // Fetch when global data sync triggers
   useEffect(() => {
     const controller = new AbortController();
-
-    // Initial fetch
     fetchCount(controller.signal);
-
-    // Use slower interval when tab is hidden
-    const interval = isVisible ? REFRESH_INTERVAL : BACKGROUND_REFRESH_INTERVAL;
-    const intervalId = setInterval(() => {
-      fetchCount(controller.signal);
-    }, interval);
-
-    return () => {
-      controller.abort();
-      clearInterval(intervalId);
-    };
-  }, [isVisible, fetchCount]);
+    return () => controller.abort();
+  }, [lastAgentUpdate, fetchCount]);
 
   return (
     <div className="terminal-window max-w-xl mx-auto mb-8">
@@ -72,7 +50,9 @@ export function LiveTerminal() {
         </p>
         <p className="text-terminal-yellow">
           <span className="text-terminal-cyan">&gt;</span> STATUS:{" "}
-          <span className="animate-pulse">{error ? "RECONNECTING_" : "READY_"}</span>
+          <span className="animate-pulse">
+            {error ? "RECONNECTING_" : isPageVisible ? "LIVE_" : "PAUSED_"}
+          </span>
         </p>
       </div>
     </div>

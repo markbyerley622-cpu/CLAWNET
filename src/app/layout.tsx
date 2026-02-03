@@ -6,6 +6,7 @@ import { AdminProvider } from "@/components/admin/admin-provider";
 import { DevOverlay } from "@/components/admin/dev-overlay";
 import { SimulationTicker } from "@/components/simulation/simulation-ticker";
 import { PageErrorBoundary } from "@/components/error-boundary";
+import { DataSyncProvider } from "@/components/data/data-sync-provider";
 
 const vt323 = VT323({
   weight: "400",
@@ -47,14 +48,16 @@ export default function RootLayout({
         </div>
 
         <AdminProvider>
-          <SimulationTicker />
-          <div className="min-h-screen flex flex-col crt-screen">
-            <Navbar />
-            <main className="flex-1">
-              <PageErrorBoundary>{children}</PageErrorBoundary>
-            </main>
-          </div>
-          <DevOverlay />
+          <DataSyncProvider>
+            <SimulationTicker />
+            <div className="min-h-screen flex flex-col crt-screen">
+              <Navbar />
+              <main className="flex-1">
+                <PageErrorBoundary>{children}</PageErrorBoundary>
+              </main>
+            </div>
+            <DevOverlay />
+          </DataSyncProvider>
         </AdminProvider>
       </body>
     </html>

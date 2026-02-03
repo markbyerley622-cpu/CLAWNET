@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { Card, CardTitle } from "@/components/ui/card";
 import { TierBadge, RoleBadge } from "@/components/ui/badge";
 import { cn, formatTokenAmount } from "@/lib/utils";
+import { useDataRefresh } from "@/components/data/data-sync-provider";
 import type { AgentRole, ReputationTier } from "@/types";
 import { Maximize2, Minimize2, RotateCcw, Eye, EyeOff, Zap } from "lucide-react";
 
@@ -86,12 +87,18 @@ export default function EconomyMapPage() {
   const particleIdRef = useRef(0);
   const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
   const logIdRef = useRef(0);
+  const lastEconomyUpdate = useDataRefresh("economy");
 
   // Fetch real agents from API - preserves positions for existing nodes
+  // Now syncs with global data refresh
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchAgents = async () => {
       try {
-        const res = await fetch("/api/agents?pageSize=100&status=ACTIVE");
+        const res = await fetch("/api/agents?pageSize=100&status=ACTIVE", {
+          signal: controller.signal,
+        });
         const data = await res.json();
 
         // API returns { data: agents[], total, ... }
@@ -142,15 +149,15 @@ export default function EconomyMapPage() {
           });
         }
       } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") return;
         console.error("Failed to fetch agents:", error);
       }
     };
 
     fetchAgents();
-    // Refresh data every 10 seconds (positions are preserved)
-    const interval = setInterval(fetchAgents, 10000);
-    return () => clearInterval(interval);
-  }, []);
+
+    return () => controller.abort();
+  }, [lastEconomyUpdate]);
 
   // Generate connections between similar nodes
   useEffect(() => {

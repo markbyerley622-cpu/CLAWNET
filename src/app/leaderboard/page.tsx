@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { TierBadge, RoleBadge } from "@/components/ui/badge";
 import { cn, formatTokenAmount } from "@/lib/utils";
+import { useDataRefresh } from "@/components/data/data-sync-provider";
 import type { AgentRole, ReputationTier, AgentStatus } from "@/types";
 import { Flame, Trophy, Clock, TrendingUp, Skull, Loader2, RefreshCw } from "lucide-react";
 
@@ -62,6 +63,7 @@ export default function LeaderboardPage() {
     avgLifetime: 0,
   });
   const abortControllerRef = useRef<AbortController | null>(null);
+  const lastLeaderboardUpdate = useDataRefresh("leaderboard");
 
   const fetchLeaderboard = useCallback(async () => {
     // Cancel any pending requests
@@ -131,6 +133,7 @@ export default function LeaderboardPage() {
     }
   }, []);
 
+  // Fetch when component mounts or global data sync triggers
   useEffect(() => {
     fetchLeaderboard();
 
@@ -140,7 +143,7 @@ export default function LeaderboardPage() {
         abortControllerRef.current.abort();
       }
     };
-  }, [fetchLeaderboard]);
+  }, [fetchLeaderboard, lastLeaderboardUpdate]);
 
   // Sort leaderboard based on active tab
   const sortedLeaderboard = [...leaderboard].sort((a, b) => {

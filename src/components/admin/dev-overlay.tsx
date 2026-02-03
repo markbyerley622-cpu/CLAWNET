@@ -29,8 +29,9 @@ interface WalletData {
 }
 
 export function DevOverlay() {
-  const { isOverlayOpen, closeOverlay, adminKey, setAdminKey, isAuthenticated } = useAdmin();
+  const { isOverlayOpen, closeOverlay, adminKey, setAdminKey, isAuthenticated, contractAddress, setContractAddress } = useAdmin();
   const [inputKey, setInputKey] = useState("");
+  const [inputCA, setInputCA] = useState("");
   const [activeTab, setActiveTab] = useState<"inject" | "upload" | "simulation" | "reset">("inject");
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -226,6 +227,62 @@ export function DevOverlay() {
             </div>
           ) : (
             <>
+              {/* Contract Address Input - Always visible at top */}
+              <div className="bg-terminal-orange/5 border border-terminal-orange/30 rounded-lg p-3 sm:p-4 mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-terminal-cyan font-bold text-sm">CA:</span>
+                  <span className="text-xs text-zinc-500">Contract Address (shown in navbar)</span>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={inputCA}
+                    onChange={(e) => setInputCA(e.target.value)}
+                    placeholder={contractAddress || "Paste contract address..."}
+                    className="input flex-1 font-mono text-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && inputCA.trim()) {
+                        setContractAddress(inputCA.trim());
+                        setInputCA("");
+                        showMessage("success", "Contract address updated!");
+                      }
+                    }}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        if (inputCA.trim()) {
+                          setContractAddress(inputCA.trim());
+                          setInputCA("");
+                          showMessage("success", "Contract address updated!");
+                        }
+                      }}
+                      disabled={!inputCA.trim()}
+                      className="btn-primary text-sm px-4 disabled:opacity-50"
+                    >
+                      Set CA
+                    </button>
+                    <button
+                      onClick={() => {
+                        setContractAddress(null);
+                        setInputCA("");
+                        showMessage("success", "Contract address cleared!");
+                      }}
+                      disabled={!contractAddress}
+                      className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded text-red-400 text-sm disabled:opacity-50"
+                      title="Reset CA"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                {contractAddress && (
+                  <div className="mt-2 text-xs text-zinc-500">
+                    Current: <span className="text-terminal-yellow font-mono">{contractAddress}</span>
+                  </div>
+                )}
+              </div>
+
               {/* Status Message */}
               {message && (
                 <div className={`flex items-center gap-2 p-3 rounded mb-4 ${

@@ -10,6 +10,8 @@ interface AdminContextType {
   adminKey: string | null;
   setAdminKey: (key: string | null) => void;
   isAuthenticated: boolean;
+  contractAddress: string | null;
+  setContractAddress: (address: string | null) => void;
 }
 
 const AdminContext = createContext<AdminContextType | null>(null);
@@ -46,6 +48,7 @@ interface AdminProviderProps {
 export function AdminProvider({ children }: AdminProviderProps) {
   const [isOverlayOpen, setIsOverlayOpen] = useState(false);
   const [adminKey, setAdminKey] = useState<string | null>(null);
+  const [contractAddress, setContractAddressState] = useState<string | null>(null);
   const [isDevMode] = useState(process.env.NODE_ENV === "development");
   const [isMounted, setIsMounted] = useState(false);
 
@@ -72,7 +75,7 @@ export function AdminProvider({ children }: AdminProviderProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
-  // Load admin key from localStorage (with safety checks)
+  // Load admin key and contract address from localStorage (with safety checks)
   useEffect(() => {
     const storage = safeLocalStorage();
     if (storage) {
@@ -80,6 +83,10 @@ export function AdminProvider({ children }: AdminProviderProps) {
         const storedKey = storage.getItem("clawnet_admin_key");
         if (storedKey) {
           setAdminKey(storedKey);
+        }
+        const storedCA = storage.getItem("clawnet_contract_address");
+        if (storedCA) {
+          setContractAddressState(storedCA);
         }
       } catch {
         // Ignore localStorage errors
@@ -104,6 +111,23 @@ export function AdminProvider({ children }: AdminProviderProps) {
     }
   }, []);
 
+  // Save contract address to localStorage (with safety checks)
+  const handleSetContractAddress = useCallback((address: string | null) => {
+    setContractAddressState(address);
+    const storage = safeLocalStorage();
+    if (storage) {
+      try {
+        if (address) {
+          storage.setItem("clawnet_contract_address", address);
+        } else {
+          storage.removeItem("clawnet_contract_address");
+        }
+      } catch {
+        // Ignore localStorage errors
+      }
+    }
+  }, []);
+
   const toggleOverlay = useCallback(() => setIsOverlayOpen((prev) => !prev), []);
   const closeOverlay = useCallback(() => setIsOverlayOpen(false), []);
 
@@ -115,6 +139,8 @@ export function AdminProvider({ children }: AdminProviderProps) {
     adminKey,
     setAdminKey: handleSetAdminKey,
     isAuthenticated: !!adminKey,
+    contractAddress,
+    setContractAddress: handleSetContractAddress,
   };
 
   return (
