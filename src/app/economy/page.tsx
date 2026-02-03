@@ -425,8 +425,8 @@ export default function EconomyMapPage() {
 
       // Keep only last 50 unique messages
       if (usedMessages.size > 50) {
-        const first = usedMessages.values().next().value;
-        usedMessages.delete(first);
+        const first = usedMessages.values().next().value as string;
+        if (first) usedMessages.delete(first);
       }
 
       setTerminalLogs(prev => {
