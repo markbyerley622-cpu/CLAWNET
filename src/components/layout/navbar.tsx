@@ -193,7 +193,7 @@ export function Navbar() {
               )}
             </button>
           ) : (
-            <span className="text-terminal-orange/40 italic">Ctrl+D to set</span>
+            <span className="text-terminal-orange/40">---</span>
           )}
         </div>
 
