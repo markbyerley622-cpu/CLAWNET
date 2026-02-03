@@ -14,6 +14,23 @@ interface AdminContextType {
 
 const AdminContext = createContext<AdminContextType | null>(null);
 
+/**
+ * Safe localStorage access - handles private browsing and SSR
+ */
+function safeLocalStorage() {
+  if (typeof window === "undefined") return null;
+
+  try {
+    // Test if localStorage is available (can throw in private browsing)
+    const testKey = "__test__";
+    window.localStorage.setItem(testKey, testKey);
+    window.localStorage.removeItem(testKey);
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
 export function useAdmin() {
   const context = useContext(AdminContext);
   if (!context) {
@@ -30,6 +47,12 @@ export function AdminProvider({ children }: AdminProviderProps) {
   const [isOverlayOpen, setIsOverlayOpen] = useState(false);
   const [adminKey, setAdminKey] = useState<string | null>(null);
   const [isDevMode] = useState(process.env.NODE_ENV === "development");
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Track mount state to prevent hydration mismatch
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Handle keyboard shortcuts
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
@@ -49,30 +72,44 @@ export function AdminProvider({ children }: AdminProviderProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
-  // Load admin key from localStorage
+  // Load admin key from localStorage (with safety checks)
   useEffect(() => {
-    const storedKey = localStorage.getItem("clawnet_admin_key");
-    if (storedKey) {
-      setAdminKey(storedKey);
+    const storage = safeLocalStorage();
+    if (storage) {
+      try {
+        const storedKey = storage.getItem("clawnet_admin_key");
+        if (storedKey) {
+          setAdminKey(storedKey);
+        }
+      } catch {
+        // Ignore localStorage errors
+      }
     }
   }, []);
 
-  // Save admin key to localStorage
-  const handleSetAdminKey = (key: string | null) => {
+  // Save admin key to localStorage (with safety checks)
+  const handleSetAdminKey = useCallback((key: string | null) => {
     setAdminKey(key);
-    if (key) {
-      localStorage.setItem("clawnet_admin_key", key);
-    } else {
-      localStorage.removeItem("clawnet_admin_key");
+    const storage = safeLocalStorage();
+    if (storage) {
+      try {
+        if (key) {
+          storage.setItem("clawnet_admin_key", key);
+        } else {
+          storage.removeItem("clawnet_admin_key");
+        }
+      } catch {
+        // Ignore localStorage errors
+      }
     }
-  };
+  }, []);
 
-  const toggleOverlay = () => setIsOverlayOpen((prev) => !prev);
-  const closeOverlay = () => setIsOverlayOpen(false);
+  const toggleOverlay = useCallback(() => setIsOverlayOpen((prev) => !prev), []);
+  const closeOverlay = useCallback(() => setIsOverlayOpen(false), []);
 
   const value: AdminContextType = {
     isDevMode,
-    isOverlayOpen,
+    isOverlayOpen: isMounted && isOverlayOpen,
     toggleOverlay,
     closeOverlay,
     adminKey,

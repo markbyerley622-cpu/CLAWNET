@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, isShuttingDown } from "@/lib/db";
 import { AgentService } from "@/lib/services/agent";
 import { ActivityService } from "@/lib/services/activity";
 import { generateUniqueAgentName } from "./names";
@@ -102,6 +102,12 @@ export class SimulationEngine {
     };
 
     try {
+      // Check if system is shutting down
+      if (isShuttingDown()) {
+        result.errors.push("System is shutting down");
+        return result;
+      }
+
       // Check if simulation is enabled
       if (process.env.SIMULATION_ENABLED !== "true") {
         result.errors.push("Simulation is disabled");
@@ -506,9 +512,12 @@ export class SimulationEngine {
   }
 
   /**
-   * Update leaderboard cache
+   * Update leaderboard cache using batched transaction
    */
   private static async updateLeaderboard(): Promise<void> {
+    // Check shutdown before expensive operation
+    if (isShuttingDown()) return;
+
     // Get all active agents with their stats
     const agents = await db.agent.findMany({
       where: { status: "ACTIVE" },
@@ -518,6 +527,8 @@ export class SimulationEngine {
       },
       orderBy: { createdAt: "asc" },
     });
+
+    if (agents.length === 0) return;
 
     // Sort by different metrics for rankings
     const byEarnings = [...agents].sort(
@@ -539,62 +550,65 @@ export class SimulationEngine {
       return bRate - aRate;
     });
 
-    // Update cache entries
-    for (const agent of agents) {
-      if (!agent.wallet || !agent.reputation) continue;
+    // Pre-compute rank lookups for O(1) access
+    const earningsRank = new Map(byEarnings.map((a, i) => [a.id, i + 1]));
+    const reliabilityRank = new Map(byReliability.map((a, i) => [a.id, i + 1]));
+    const longevityRank = new Map(byLongevity.map((a, i) => [a.id, i + 1]));
+    const successRateRank = new Map(bySuccessRate.map((a, i) => [a.id, i + 1]));
 
-      const activeDays = Math.floor(
-        (Date.now() - agent.createdAt.getTime()) / (24 * 60 * 60 * 1000)
-      );
+    // Batch upsert in a transaction for consistency and performance
+    const BATCH_SIZE = 50;
+    const validAgents = agents.filter((a) => a.wallet && a.reputation);
+    const agentIds = validAgents.map((a) => a.id);
 
-      const successRate = agent.reputation.totalTasksAttempted > 0
-        ? agent.reputation.tasksCompleted / agent.reputation.totalTasksAttempted
-        : 0;
+    await db.$transaction(async (tx) => {
+      // Process in batches to avoid overwhelming the database
+      for (let i = 0; i < validAgents.length; i += BATCH_SIZE) {
+        if (isShuttingDown()) return;
 
-      await db.leaderboardCache.upsert({
-        where: { agentId: agent.id },
-        create: {
-          agentId: agent.id,
-          rankByEarnings: byEarnings.findIndex((a) => a.id === agent.id) + 1,
-          rankByReliability: byReliability.findIndex((a) => a.id === agent.id) + 1,
-          rankByLongevity: byLongevity.findIndex((a) => a.id === agent.id) + 1,
-          rankBySuccessRate: bySuccessRate.findIndex((a) => a.id === agent.id) + 1,
-          agentName: agent.name,
-          agentRole: agent.role,
-          agentStatus: agent.status,
-          totalEarnings: agent.wallet.totalEarned,
-          reliability: agent.reputation.reliability,
-          activeDays,
-          successRate,
-          tier: agent.reputation.tier,
-          currentStreak: agent.reputation.currentStreak,
-        },
-        update: {
-          rankByEarnings: byEarnings.findIndex((a) => a.id === agent.id) + 1,
-          rankByReliability: byReliability.findIndex((a) => a.id === agent.id) + 1,
-          rankByLongevity: byLongevity.findIndex((a) => a.id === agent.id) + 1,
-          rankBySuccessRate: bySuccessRate.findIndex((a) => a.id === agent.id) + 1,
-          agentName: agent.name,
-          agentRole: agent.role,
-          agentStatus: agent.status,
-          totalEarnings: agent.wallet.totalEarned,
-          reliability: agent.reputation.reliability,
-          activeDays,
-          successRate,
-          tier: agent.reputation.tier,
-          currentStreak: agent.reputation.currentStreak,
-          updatedAt: new Date(),
+        const batch = validAgents.slice(i, i + BATCH_SIZE);
+
+        await Promise.all(
+          batch.map((agent) => {
+            const activeDays = Math.floor(
+              (Date.now() - agent.createdAt.getTime()) / (24 * 60 * 60 * 1000)
+            );
+
+            const successRate = agent.reputation!.totalTasksAttempted > 0
+              ? agent.reputation!.tasksCompleted / agent.reputation!.totalTasksAttempted
+              : 0;
+
+            const data = {
+              rankByEarnings: earningsRank.get(agent.id) || 999,
+              rankByReliability: reliabilityRank.get(agent.id) || 999,
+              rankByLongevity: longevityRank.get(agent.id) || 999,
+              rankBySuccessRate: successRateRank.get(agent.id) || 999,
+              agentName: agent.name,
+              agentRole: agent.role,
+              agentStatus: agent.status,
+              totalEarnings: agent.wallet!.totalEarned,
+              reliability: agent.reputation!.reliability,
+              activeDays,
+              successRate,
+              tier: agent.reputation!.tier,
+              currentStreak: agent.reputation!.currentStreak,
+            };
+
+            return tx.leaderboardCache.upsert({
+              where: { agentId: agent.id },
+              create: { agentId: agent.id, ...data },
+              update: { ...data, updatedAt: new Date() },
+            });
+          })
+        );
+      }
+
+      // Remove entries for archived agents in the same transaction
+      await tx.leaderboardCache.deleteMany({
+        where: {
+          agentId: { notIn: agentIds },
         },
       });
-    }
-
-    // Remove entries for archived agents
-    await db.leaderboardCache.deleteMany({
-      where: {
-        agentId: {
-          notIn: agents.map((a) => a.id),
-        },
-      },
     });
   }
 

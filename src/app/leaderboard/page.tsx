@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { TierBadge, RoleBadge } from "@/components/ui/badge";
@@ -61,14 +61,25 @@ export default function LeaderboardPage() {
     totalVolume: 0n,
     avgLifetime: 0,
   });
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  const fetchLeaderboard = async () => {
+  const fetchLeaderboard = useCallback(async () => {
+    // Cancel any pending requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setIsLoading(true);
     setError(null);
 
     try {
       // Fetch leaderboard data
-      const response = await fetch("/api/leaderboard");
+      const response = await fetch("/api/leaderboard", {
+        signal: controller.signal,
+      });
       const result = await response.json();
 
       if (!response.ok) {
@@ -89,7 +100,9 @@ export default function LeaderboardPage() {
       const volume = entries.reduce((sum: bigint, e: LeaderboardEntry) => sum + e.totalEarnings, 0n);
 
       // Fetch archived agents for Hall of Fame
-      const archivedResponse = await fetch("/api/agents?status=ARCHIVED&pageSize=10");
+      const archivedResponse = await fetch("/api/agents?status=ARCHIVED&pageSize=10", {
+        signal: controller.signal,
+      });
       const archivedResult = await archivedResponse.json();
 
       if (archivedResponse.ok) {
@@ -111,15 +124,23 @@ export default function LeaderboardPage() {
         });
       }
     } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "Failed to fetch leaderboard");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchLeaderboard();
-  }, []);
+
+    return () => {
+      // Cleanup: abort any pending requests
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [fetchLeaderboard]);
 
   // Sort leaderboard based on active tab
   const sortedLeaderboard = [...leaderboard].sort((a, b) => {

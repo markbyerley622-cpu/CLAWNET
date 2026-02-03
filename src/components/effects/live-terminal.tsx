@@ -1,25 +1,55 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+
+const REFRESH_INTERVAL = 10000; // 10 seconds when visible
+const BACKGROUND_REFRESH_INTERVAL = 60000; // 60 seconds when hidden
 
 export function LiveTerminal() {
   const [agentCount, setAgentCount] = useState<number | null>(null);
+  const [isVisible, setIsVisible] = useState(true);
+  const [error, setError] = useState(false);
 
+  // Track page visibility
   useEffect(() => {
-    const fetchCount = async () => {
-      try {
-        const res = await fetch("/api/agents?status=ACTIVE&pageSize=1");
-        const data = await res.json();
-        setAgentCount(data.total || 0);
-      } catch {
-        // Silently fail
-      }
+    const handleVisibilityChange = () => {
+      setIsVisible(document.visibilityState === "visible");
     };
 
-    fetchCount();
-    const interval = setInterval(fetchCount, 10000); // Refresh every 10 seconds
-    return () => clearInterval(interval);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, []);
+
+  const fetchCount = useCallback(async (signal: AbortSignal) => {
+    try {
+      const res = await fetch("/api/agents?status=ACTIVE&pageSize=1", { signal });
+      if (!res.ok) throw new Error("Failed to fetch");
+      const data = await res.json();
+      setAgentCount(data.total || 0);
+      setError(false);
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      setError(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    // Initial fetch
+    fetchCount(controller.signal);
+
+    // Use slower interval when tab is hidden
+    const interval = isVisible ? REFRESH_INTERVAL : BACKGROUND_REFRESH_INTERVAL;
+    const intervalId = setInterval(() => {
+      fetchCount(controller.signal);
+    }, interval);
+
+    return () => {
+      controller.abort();
+      clearInterval(intervalId);
+    };
+  }, [isVisible, fetchCount]);
 
   return (
     <div className="terminal-window max-w-xl mx-auto mb-8">
@@ -36,13 +66,13 @@ export function LiveTerminal() {
         </p>
         <p className="text-terminal-orange mb-1">
           <span className="text-terminal-cyan">&gt;</span> Agents Online:{" "}
-          <span className="text-terminal-yellow">
-            {agentCount !== null ? agentCount : "..."}
+          <span className={error ? "text-red-400" : "text-terminal-yellow"}>
+            {error ? "ERR" : agentCount !== null ? agentCount : "..."}
           </span>
         </p>
         <p className="text-terminal-yellow">
           <span className="text-terminal-cyan">&gt;</span> STATUS:{" "}
-          <span className="animate-pulse">READY_</span>
+          <span className="animate-pulse">{error ? "RECONNECTING_" : "READY_"}</span>
         </p>
       </div>
     </div>

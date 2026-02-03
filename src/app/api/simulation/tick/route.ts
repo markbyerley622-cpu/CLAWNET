@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SimulationEngine } from "@/lib/simulation/engine";
+import { SimulationStateService } from "@/lib/simulation/state";
+import { isShuttingDown } from "@/lib/db";
 
 /**
  * POST /api/simulation/tick
@@ -11,10 +13,24 @@ import { SimulationEngine } from "@/lib/simulation/engine";
  * - Manual testing
  */
 export async function POST(request: NextRequest) {
-  try {
-    // Simulation ticks are allowed from any source
-    // This just processes game logic, no sensitive data
+  // Check if system is shutting down
+  if (isShuttingDown()) {
+    return NextResponse.json(
+      { success: false, error: "System is shutting down" },
+      { status: 503 }
+    );
+  }
 
+  // Try to acquire tick lock to prevent concurrent ticks
+  if (!SimulationStateService.acquireTickLock()) {
+    return NextResponse.json({
+      success: true,
+      skipped: true,
+      reason: "Tick already in progress or rate limited",
+    });
+  }
+
+  try {
     // Execute simulation tick
     const result = await SimulationEngine.tick();
 
@@ -31,6 +47,9 @@ export async function POST(request: NextRequest) {
       },
       { status: 500 }
     );
+  } finally {
+    // Always release the lock
+    SimulationStateService.releaseTickLock();
   }
 }
 
@@ -43,5 +62,6 @@ export async function GET() {
     success: true,
     message: "Simulation tick endpoint. Use POST to execute a tick.",
     enabled: process.env.SIMULATION_ENABLED === "true",
+    tickInProgress: SimulationStateService.isTickInProgress(),
   });
 }
