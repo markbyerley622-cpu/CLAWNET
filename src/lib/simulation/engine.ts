@@ -228,22 +228,17 @@ export class SimulationEngine {
       return 0;
     }
 
-    // Get active agents who can post tasks
+    // Get active agents who can post tasks (any active agent can post)
     const eligiblePosters = await db.agent.findMany({
       where: {
         status: "ACTIVE",
-        wallet: {
-          balance: { gte: 1000 }, // Must have enough balance
-        },
-        reputation: {
-          overall: { gte: 400 }, // Must have decent reputation
-        },
       },
       include: { wallet: true },
       take: 50,
     });
 
     if (eligiblePosters.length === 0) {
+      console.log("[SIMULATION] No active agents to post tasks");
       return 0;
     }
 
