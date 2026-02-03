@@ -4,11 +4,10 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { cn, truncateAddress } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { LiveTicker } from "@/components/effects/live-ticker";
-import { useAdmin } from "@/components/admin/admin-provider";
 import { useDataRefresh } from "@/components/data/data-sync-provider";
-import { Menu, X, Copy, Check, Twitter } from "lucide-react";
+import { Menu, X, Twitter } from "lucide-react";
 
 const navLinks = [
   { href: "/economy", label: "[ECONOMY]" },
@@ -20,21 +19,7 @@ export function Navbar() {
   const pathname = usePathname();
   const [agentCount, setAgentCount] = useState<number | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const { contractAddress } = useAdmin();
   const lastAgentUpdate = useDataRefresh("agents");
-
-  const copyCA = async () => {
-    if (contractAddress) {
-      try {
-        await navigator.clipboard.writeText(contractAddress);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      } catch {
-        // Ignore clipboard errors
-      }
-    }
-  };
 
   // Fetch agent count when data sync triggers refresh
   useEffect(() => {
@@ -194,29 +179,6 @@ export function Navbar() {
 
       {/* Terminal status bar */}
       <div className="border-b border-terminal-orange/30 bg-black px-2 sm:px-4 py-1.5 flex items-center justify-between text-xs font-mono gap-2">
-        {/* CA Display - prominent on left */}
-        <div className="flex items-center gap-1.5 min-w-0 flex-1">
-          <span className="text-terminal-cyan font-bold shrink-0">CA:</span>
-          {contractAddress ? (
-            <button
-              onClick={copyCA}
-              className="flex items-center gap-1 min-w-0 hover:bg-terminal-orange/10 px-1.5 py-0.5 rounded transition-colors group"
-              title={`Click to copy: ${contractAddress}`}
-            >
-              <span className="text-terminal-yellow truncate max-w-[120px] sm:max-w-[200px] md:max-w-[300px] lg:max-w-[400px]">
-                {contractAddress}
-              </span>
-              {copied ? (
-                <Check className="w-3 h-3 text-green-400 shrink-0" />
-              ) : (
-                <Copy className="w-3 h-3 text-terminal-orange/60 group-hover:text-terminal-orange shrink-0" />
-              )}
-            </button>
-          ) : (
-            <span className="text-terminal-orange/40">---</span>
-          )}
-        </div>
-
         {/* Follow X link */}
         <a
           href="https://x.com/clawnetxyz"
