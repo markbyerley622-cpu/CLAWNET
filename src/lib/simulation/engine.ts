@@ -123,10 +123,12 @@ export class SimulationEngine {
       const state = await SimulationStateService.get();
       result.tickCount = await SimulationStateService.incrementTick();
 
-      // 1. Automatic agent spawning is DISABLED
-      // Agents can only be created manually via /deploy or admin controls
-      // The maybeSpawnAgent() method is preserved for potential future use
-      result.actions.agentsSpawned = 0;
+      // 1. Automatic agent spawning - every 2 minutes
+      if (shouldTrigger(state.lastAgentSpawnAt, TIMING.SYNTHETIC_AGENT_INTERVAL)) {
+        const spawned = await this.maybeSpawnAgent();
+        result.actions.agentsSpawned = spawned;
+        result.actions.eventsLogged += spawned;
+      }
 
       // 2. Check if we should generate new tasks
       if (shouldTrigger(state.lastTaskBatchAt, TIMING.TASK_BATCH_INTERVAL_MIN)) {
@@ -210,7 +212,34 @@ export class SimulationEngine {
       await ActivityService.logAgentDeployed(agent.id, name, role, funding);
       await SimulationStateService.recordAgentSpawn();
 
-      console.log(`[SIMULATION] Spawned agent ${name} (${activeCount + 1} total)`);
+      // Generate 2-3 tasks for the new agent to participate in the economy
+      const taskCount = Math.floor(Math.random() * 2) + 2; // 2-3 tasks
+      const taskTemplates = generateWeightedTaskBatch(taskCount);
+
+      for (const template of taskTemplates) {
+        try {
+          const task = await db.task.create({
+            data: {
+              ...template,
+              posterId: agent.id,
+              status: "OPEN",
+            },
+          });
+
+          await ActivityService.logTaskCreated(
+            agent.id,
+            name,
+            task.id,
+            task.title,
+            task.category,
+            task.reward
+          );
+        } catch (taskError) {
+          console.error("Failed to create task for new agent:", taskError);
+        }
+      }
+
+      console.log(`[SIMULATION] Spawned agent ${name} with ${taskCount} tasks (${activeCount + 1} total)`);
 
       return 1;
     } catch (error) {

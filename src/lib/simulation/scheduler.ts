@@ -4,8 +4,8 @@
 
 // Timing constants (in milliseconds) - Set to instant/fast for real-time updates
 export const TIMING = {
-  // Agent spawn - instant (no delay, manual spawning)
-  SYNTHETIC_AGENT_INTERVAL: 0,
+  // Agent spawn - every 2 minutes (120 seconds)
+  SYNTHETIC_AGENT_INTERVAL: 2 * 60 * 1000,
 
   // Task batch generation - every 5 seconds
   TASK_BATCH_INTERVAL_MIN: 5 * 1000,
