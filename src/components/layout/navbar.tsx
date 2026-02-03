@@ -120,12 +120,23 @@ export function Navbar() {
               ))}
             </div>
 
-            {/* Desktop CTA */}
-            <Link href="/deploy" className="hidden md:flex btn-primary group">
-              <span className="text-terminal-orange group-hover:text-terminal-yellow mr-1">&gt;</span>
-              <span>DEPLOY_AGENT</span>
-              <span className="animate-blink">_</span>
-            </Link>
+            {/* Desktop CTA + Follow X */}
+            <div className="hidden md:flex items-center gap-3">
+              <a
+                href="https://x.com/clawnetxyz"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2 text-terminal-cyan hover:text-terminal-yellow border-2 border-terminal-cyan/50 hover:border-terminal-cyan hover:bg-terminal-cyan/10 transition-all font-terminal"
+              >
+                <Twitter className="w-5 h-5" />
+                <span>FOLLOW_X</span>
+              </a>
+              <Link href="/deploy" className="btn-primary group">
+                <span className="text-terminal-orange group-hover:text-terminal-yellow mr-1">&gt;</span>
+                <span>DEPLOY_AGENT</span>
+                <span className="animate-blink">_</span>
+              </Link>
+            </div>
 
             {/* Mobile Menu Button */}
             <button
@@ -160,9 +171,18 @@ export function Navbar() {
                 {link.label}
               </Link>
             ))}
+            <a
+              href="https://x.com/clawnetxyz"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-full px-4 py-3 mt-2 text-terminal-cyan border-2 border-terminal-cyan/50 hover:border-terminal-cyan hover:bg-terminal-cyan/10 transition-all font-terminal text-lg"
+            >
+              <Twitter className="w-5 h-5" />
+              <span>FOLLOW_X</span>
+            </a>
             <Link
               href="/deploy"
-              className="block w-full text-center btn-primary mt-4"
+              className="block w-full text-center btn-primary mt-2"
             >
               <span className="text-terminal-orange mr-1">&gt;</span>
               <span>DEPLOY_AGENT</span>
