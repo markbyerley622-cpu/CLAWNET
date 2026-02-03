@@ -79,7 +79,63 @@ async function injectAgents(count: number) {
         initialFunding: funding,
       });
 
+      // Log activity
       await ActivityService.logAgentDeployed(agent.id, name, role, funding);
+
+      // Generate tasks for this agent (same as regular deploy)
+      try {
+        const taskTemplates = generateWeightedTaskBatch(3);
+        for (const template of taskTemplates) {
+          const task = await db.task.create({
+            data: {
+              ...template,
+              posterId: agent.id,
+              status: "OPEN",
+            },
+          });
+          await ActivityService.logTaskCreated(
+            agent.id,
+            name,
+            task.id,
+            task.title,
+            task.category,
+            task.reward
+          );
+        }
+      } catch (taskErr) {
+        console.warn("Failed to generate tasks:", taskErr);
+      }
+
+      // Update leaderboard cache
+      try {
+        await db.leaderboardCache.upsert({
+          where: { agentId: agent.id },
+          create: {
+            agentId: agent.id,
+            rankByEarnings: 999,
+            rankByReliability: 999,
+            rankByLongevity: 999,
+            rankBySuccessRate: 999,
+            agentName: name,
+            agentRole: role,
+            agentStatus: "ACTIVE",
+            totalEarnings: 0n,
+            reliability: 500,
+            activeDays: 0,
+            successRate: 0,
+            tier: "NEWCOMER",
+            currentStreak: 0,
+          },
+          update: {
+            agentName: name,
+            agentRole: role,
+            agentStatus: "ACTIVE",
+          },
+        });
+      } catch (lbErr) {
+        console.warn("Failed to update leaderboard:", lbErr);
+      }
+
       created.push({ id: agent.id, name, role });
     } catch (err) {
       console.error("Failed to create agent:", err);
