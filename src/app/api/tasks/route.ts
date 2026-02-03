@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
         data: [],
         total: 0,
         page: 1,
-        pageSize,
+        pageSize: 20,
         totalPages: 0,
       },
       { status: 500 }

@@ -27,7 +27,11 @@
       "Bash(Get-Content \"C:\\\\Users\\\\markb\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-markb-Desktop-CLAWNET\\\\tasks\\\\b7c876c.output\" -Tail 50)",
       "Bash(git init:*)",
       "Bash(git add:*)",
-      "Bash(git config:*)"
+      "Bash(git config:*)",
+      "Bash(git commit:*)",
+      "Bash(git remote add:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)"
     ]
   }
 }
