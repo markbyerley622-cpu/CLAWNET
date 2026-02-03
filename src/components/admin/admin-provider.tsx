@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 
 interface AdminContextType {
   isDevMode: boolean;
@@ -11,7 +11,8 @@ interface AdminContextType {
   setAdminKey: (key: string | null) => void;
   isAuthenticated: boolean;
   contractAddress: string | null;
-  setContractAddress: (address: string | null) => void;
+  setContractAddress: (address: string | null) => Promise<void>;
+  isCALoading: boolean;
 }
 
 const AdminContext = createContext<AdminContextType | null>(null);
@@ -45,12 +46,17 @@ interface AdminProviderProps {
   children: React.ReactNode;
 }
 
+// Polling interval for CA updates (5 seconds)
+const CA_POLL_INTERVAL = 5000;
+
 export function AdminProvider({ children }: AdminProviderProps) {
   const [isOverlayOpen, setIsOverlayOpen] = useState(false);
   const [adminKey, setAdminKey] = useState<string | null>(null);
   const [contractAddress, setContractAddressState] = useState<string | null>(null);
+  const [isCALoading, setIsCALoading] = useState(false);
   const [isDevMode] = useState(process.env.NODE_ENV === "development");
   const [isMounted, setIsMounted] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Track mount state to prevent hydration mismatch
   useEffect(() => {
@@ -75,7 +81,42 @@ export function AdminProvider({ children }: AdminProviderProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
-  // Load admin key and contract address from localStorage (with safety checks)
+  // Fetch contract address from API
+  const fetchContractAddress = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const res = await fetch("/api/settings", { signal });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.data) {
+          setContractAddressState(data.data.contractAddress || null);
+        }
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      // Silently fail - will retry on next poll
+    }
+  }, []);
+
+  // Poll for CA updates from server (real-time sync across all clients)
+  useEffect(() => {
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    // Initial fetch
+    fetchContractAddress(controller.signal);
+
+    // Poll for updates
+    const interval = setInterval(() => {
+      fetchContractAddress(controller.signal);
+    }, CA_POLL_INTERVAL);
+
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
+  }, [fetchContractAddress]);
+
+  // Load admin key from localStorage (with safety checks)
   useEffect(() => {
     const storage = safeLocalStorage();
     if (storage) {
@@ -83,10 +124,6 @@ export function AdminProvider({ children }: AdminProviderProps) {
         const storedKey = storage.getItem("clawnet_admin_key");
         if (storedKey) {
           setAdminKey(storedKey);
-        }
-        const storedCA = storage.getItem("clawnet_contract_address");
-        if (storedCA) {
-          setContractAddressState(storedCA);
         }
       } catch {
         // Ignore localStorage errors
@@ -111,20 +148,26 @@ export function AdminProvider({ children }: AdminProviderProps) {
     }
   }, []);
 
-  // Save contract address to localStorage (with safety checks)
-  const handleSetContractAddress = useCallback((address: string | null) => {
-    setContractAddressState(address);
-    const storage = safeLocalStorage();
-    if (storage) {
-      try {
-        if (address) {
-          storage.setItem("clawnet_contract_address", address);
-        } else {
-          storage.removeItem("clawnet_contract_address");
+  // Save contract address to server (global sync)
+  const handleSetContractAddress = useCallback(async (address: string | null) => {
+    setIsCALoading(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contractAddress: address }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setContractAddressState(data.data.contractAddress || null);
         }
-      } catch {
-        // Ignore localStorage errors
       }
+    } catch (err) {
+      console.error("Failed to update contract address:", err);
+    } finally {
+      setIsCALoading(false);
     }
   }, []);
 
@@ -141,6 +184,7 @@ export function AdminProvider({ children }: AdminProviderProps) {
     isAuthenticated: !!adminKey,
     contractAddress,
     setContractAddress: handleSetContractAddress,
+    isCALoading,
   };
 
   return (

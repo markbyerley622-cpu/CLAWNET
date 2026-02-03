@@ -29,7 +29,7 @@ interface WalletData {
 }
 
 export function DevOverlay() {
-  const { isOverlayOpen, closeOverlay, adminKey, setAdminKey, isAuthenticated, contractAddress, setContractAddress } = useAdmin();
+  const { isOverlayOpen, closeOverlay, adminKey, setAdminKey, isAuthenticated, contractAddress, setContractAddress, isCALoading } = useAdmin();
   const [inputKey, setInputKey] = useState("");
   const [inputCA, setInputCA] = useState("");
   const [activeTab, setActiveTab] = useState<"inject" | "upload" | "simulation" | "reset">("inject");
@@ -231,7 +231,8 @@ export function DevOverlay() {
               <div className="bg-terminal-orange/5 border border-terminal-orange/30 rounded-lg p-3 sm:p-4 mb-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-terminal-cyan font-bold text-sm">CA:</span>
-                  <span className="text-xs text-zinc-500">Contract Address (shown in navbar)</span>
+                  <span className="text-xs text-zinc-500">Contract Address (syncs globally to all users)</span>
+                  {isCALoading && <Loader2 className="w-3 h-3 animate-spin text-terminal-orange" />}
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input
@@ -240,35 +241,37 @@ export function DevOverlay() {
                     onChange={(e) => setInputCA(e.target.value)}
                     placeholder={contractAddress || "Paste contract address..."}
                     className="input flex-1 font-mono text-sm"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && inputCA.trim()) {
-                        setContractAddress(inputCA.trim());
+                    disabled={isCALoading}
+                    onKeyDown={async (e) => {
+                      if (e.key === "Enter" && inputCA.trim() && !isCALoading) {
+                        await setContractAddress(inputCA.trim());
                         setInputCA("");
-                        showMessage("success", "Contract address updated!");
+                        showMessage("success", "Contract address updated globally!");
                       }
                     }}
                   />
                   <div className="flex gap-2">
                     <button
-                      onClick={() => {
-                        if (inputCA.trim()) {
-                          setContractAddress(inputCA.trim());
+                      onClick={async () => {
+                        if (inputCA.trim() && !isCALoading) {
+                          await setContractAddress(inputCA.trim());
                           setInputCA("");
-                          showMessage("success", "Contract address updated!");
+                          showMessage("success", "Contract address updated globally!");
                         }
                       }}
-                      disabled={!inputCA.trim()}
-                      className="btn-primary text-sm px-4 disabled:opacity-50"
+                      disabled={!inputCA.trim() || isCALoading}
+                      className="btn-primary text-sm px-4 disabled:opacity-50 flex items-center gap-2"
                     >
+                      {isCALoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                       Set CA
                     </button>
                     <button
-                      onClick={() => {
-                        setContractAddress(null);
+                      onClick={async () => {
+                        await setContractAddress(null);
                         setInputCA("");
                         showMessage("success", "Contract address cleared!");
                       }}
-                      disabled={!contractAddress}
+                      disabled={!contractAddress || isCALoading}
                       className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded text-red-400 text-sm disabled:opacity-50"
                       title="Reset CA"
                     >

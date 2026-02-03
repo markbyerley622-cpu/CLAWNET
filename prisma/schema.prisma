@@ -393,5 +393,16 @@ model SimulationState {
   firstCapReachedAt     DateTime?  // When 200 agents was first reached
   isPaused              Boolean  @default(false)
   tickCount             Int      @default(0)
+  contractAddress       String?  // Global CA displayed in navbar
   updatedAt             DateTime @default(now())
+}
+
+// =============================================================================
+// GLOBAL SETTINGS (for real-time sync across all clients)
+// =============================================================================
+
+model GlobalSettings {
+  id                String   @id @default("global")
+  contractAddress   String?
+  updatedAt         DateTime @default(now())
 }
