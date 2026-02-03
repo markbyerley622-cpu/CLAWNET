@@ -6,6 +6,15 @@ export const dynamic = "force-dynamic";
 
 const SETTINGS_ID = "global";
 
+// Default response when database is unavailable
+const defaultResponse = () => NextResponse.json({
+  success: true,
+  data: {
+    contractAddress: null,
+    updatedAt: new Date(),
+  },
+});
+
 /**
  * GET /api/settings
  * Get global settings (including contract address)
@@ -13,18 +22,11 @@ const SETTINGS_ID = "global";
 export async function GET() {
   try {
     // Try GlobalSettings table first
-    try {
-      let settings = await db.globalSettings.findUnique({
-        where: { id: SETTINGS_ID },
-      });
+    const settings = await db.globalSettings.findUnique({
+      where: { id: SETTINGS_ID },
+    });
 
-      // Create if doesn't exist
-      if (!settings) {
-        settings = await db.globalSettings.create({
-          data: { id: SETTINGS_ID },
-        });
-      }
-
+    if (settings) {
       return NextResponse.json({
         success: true,
         data: {
@@ -32,32 +34,23 @@ export async function GET() {
           updatedAt: settings.updatedAt,
         },
       });
-    } catch (dbError) {
-      // Table might not exist yet - try fallback to SimulationState
-      console.warn("GlobalSettings table error, trying fallback:", dbError);
-
-      const simState = await db.simulationState.findUnique({
-        where: { id: "singleton" },
-      });
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          contractAddress: simState?.contractAddress || null,
-          updatedAt: simState?.updatedAt || new Date(),
-        },
-      });
     }
-  } catch (error) {
-    console.error("Error fetching settings:", error);
-    // Return default values instead of error
+
+    // Create if doesn't exist
+    const newSettings = await db.globalSettings.create({
+      data: { id: SETTINGS_ID },
+    });
+
     return NextResponse.json({
       success: true,
       data: {
-        contractAddress: null,
-        updatedAt: new Date(),
+        contractAddress: newSettings.contractAddress,
+        updatedAt: newSettings.updatedAt,
       },
     });
+  } catch (error) {
+    // Database error - return defaults (don't spam console)
+    return defaultResponse();
   }
 }
 
@@ -78,7 +71,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    // Upsert settings
+    // Upsert to GlobalSettings table
     const settings = await db.globalSettings.upsert({
       where: { id: SETTINGS_ID },
       create: {
@@ -101,7 +94,7 @@ export async function PATCH(request: NextRequest) {
   } catch (error) {
     console.error("Error updating settings:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to update settings" },
+      { success: false, error: "Database not migrated. Run: npx prisma migrate deploy" },
       { status: 500 }
     );
   }

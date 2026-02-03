@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAdmin } from "./admin-provider";
+import { useDataSync } from "../data/data-sync-provider";
 import {
   X,
   Play,
@@ -30,6 +31,7 @@ interface WalletData {
 
 export function DevOverlay() {
   const { isOverlayOpen, closeOverlay, adminKey, setAdminKey, isAuthenticated, contractAddress, setContractAddress, isCALoading } = useAdmin();
+  const { refreshAll } = useDataSync();
   const [inputKey, setInputKey] = useState("");
   const [inputCA, setInputCA] = useState("");
   const [activeTab, setActiveTab] = useState<"inject" | "upload" | "simulation" | "reset">("inject");
@@ -55,7 +57,7 @@ export function DevOverlay() {
     setTimeout(() => setMessage(null), 3000);
   };
 
-  const apiCall = async (url: string, options?: RequestInit) => {
+  const apiCall = async (url: string, options?: RequestInit, triggerRefresh = true) => {
     setIsLoading(true);
     setMessage(null);
 
@@ -76,6 +78,12 @@ export function DevOverlay() {
       }
 
       showMessage("success", result.message || "Success!");
+
+      // Trigger refresh so UI updates immediately
+      if (triggerRefresh) {
+        refreshAll();
+      }
+
       return result;
     } catch (err) {
       showMessage("error", err instanceof Error ? err.message : "Unknown error");
