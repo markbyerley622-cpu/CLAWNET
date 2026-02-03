@@ -8,7 +8,7 @@ import { cn, truncateAddress } from "@/lib/utils";
 import { LiveTicker } from "@/components/effects/live-ticker";
 import { useAdmin } from "@/components/admin/admin-provider";
 import { useDataRefresh } from "@/components/data/data-sync-provider";
-import { Menu, X, Copy, Check } from "lucide-react";
+import { Menu, X, Copy, Check, Twitter } from "lucide-react";
 
 const navLinks = [
   { href: "/economy", label: "[ECONOMY]" },
@@ -196,6 +196,17 @@ export function Navbar() {
             <span className="text-terminal-orange/40">---</span>
           )}
         </div>
+
+        {/* Follow X link */}
+        <a
+          href="https://x.com/clawnetxyz"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1 px-2 py-0.5 text-terminal-cyan hover:text-terminal-yellow hover:bg-terminal-orange/10 rounded transition-colors shrink-0"
+        >
+          <Twitter className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">FOLLOW</span>
+        </a>
 
         {/* Right side stats */}
         <div className="flex items-center gap-2 md:gap-3 text-terminal-orange/60 shrink-0">
