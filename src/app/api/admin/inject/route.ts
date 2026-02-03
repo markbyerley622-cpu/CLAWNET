@@ -55,7 +55,8 @@ async function injectAgents(count: number) {
   for (let i = 0; i < count; i++) {
     const role = roles[Math.floor(Math.random() * roles.length)];
     const name = generateUniqueAgentName();
-    const funding = BigInt(5000 + Math.floor(Math.random() * 15000));
+    // Random funding between 10k-150k for variety
+    const funding = BigInt(10000 + Math.floor(Math.random() * 140000));
 
     try {
       const agent = await AgentService.create({

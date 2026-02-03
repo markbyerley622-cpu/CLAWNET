@@ -84,6 +84,8 @@ export default function EconomyMapPage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number>();
   const particleIdRef = useRef(0);
+  const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
+  const logIdRef = useRef(0);
 
   // Fetch real agents from API - preserves positions for existing nodes
   useEffect(() => {
@@ -385,6 +387,63 @@ export default function EconomyMapPage() {
       }
     };
   }, [dragging]);
+
+  // Generate live terminal activity logs
+  useEffect(() => {
+    if (nodes.length === 0) return;
+
+    const activities = [
+      (n: BubbleNode) => `[SYNC] ${n.label} heartbeat OK`,
+      (n: BubbleNode) => `[NET] ${n.label} → peer discovery`,
+      (n: BubbleNode) => `[TASK] ${n.label} scanning queue...`,
+      (n: BubbleNode) => `[REP] ${n.label} score: ${500 + Math.floor(Math.random() * 400)}`,
+      (n: BubbleNode) => `[TX] ${n.label} balance check`,
+      (n: BubbleNode) => `[COMPUTE] ${n.label} processing...`,
+      (n: BubbleNode) => `[VALIDATE] ${n.label} verifying block`,
+      (n: BubbleNode) => `[ORBIT] ${n.label} adjusting trajectory`,
+      (n: BubbleNode) => `[SWARM] ${n.label} syncing with cluster`,
+      (n: BubbleNode) => `[PING] ${n.label} latency: ${5 + Math.floor(Math.random() * 45)}ms`,
+      (n: BubbleNode) => `[POOL] ${n.label} joined task pool`,
+      (n: BubbleNode) => `[BID] ${n.label} evaluating opportunity`,
+      (n: BubbleNode) => `[STAKE] ${n.label} locked ${Math.floor(Math.random() * 500)} CLAW`,
+      (n: BubbleNode) => `[REWARD] ${n.label} +${10 + Math.floor(Math.random() * 90)} CLAW`,
+      (n: BubbleNode) => `[STATUS] ${n.label} ACTIVE`,
+    ];
+
+    const usedMessages = new Set<string>();
+
+    const addLog = () => {
+      if (nodes.length === 0) return;
+
+      const node = nodes[Math.floor(Math.random() * nodes.length)];
+      const activityFn = activities[Math.floor(Math.random() * activities.length)];
+      const message = activityFn(node);
+
+      // Skip if we've seen this exact message recently
+      if (usedMessages.has(message)) return;
+      usedMessages.add(message);
+
+      // Keep only last 50 unique messages
+      if (usedMessages.size > 50) {
+        const first = usedMessages.values().next().value;
+        usedMessages.delete(first);
+      }
+
+      setTerminalLogs(prev => {
+        const newLogs = [...prev, message].slice(-8); // Keep last 8 logs
+        return newLogs;
+      });
+    };
+
+    // Add initial logs
+    for (let i = 0; i < 4; i++) {
+      setTimeout(() => addLog(), i * 200);
+    }
+
+    // Add new logs periodically
+    const interval = setInterval(addLog, 1500 + Math.random() * 1000);
+    return () => clearInterval(interval);
+  }, [nodes.length]);
 
   const filteredNodes = useMemo(() => {
     return nodes.filter((node) => {
@@ -816,6 +875,36 @@ export default function EconomyMapPage() {
                     {formatTokenAmount(BigInt(filteredNodes.reduce((sum, n) => sum + n.balance, 0)))}
                   </span>
                 </div>
+              </div>
+            </Card>
+
+            {/* Live Activity Terminal */}
+            <Card className="p-4">
+              <CardTitle className="mb-3 flex items-center gap-2">
+                <span className="inline-block w-2 h-2 bg-terminal-green rounded-full animate-pulse" />
+                &gt; LIVE_FEED
+              </CardTitle>
+              <div className="bg-black/50 border border-terminal-orange/20 rounded p-2 h-40 overflow-hidden font-mono text-xs">
+                {terminalLogs.map((log, i) => (
+                  <div
+                    key={`${log}-${i}`}
+                    className={cn(
+                      "py-0.5 transition-opacity duration-300",
+                      i === terminalLogs.length - 1 ? "text-terminal-green" : "text-terminal-orange/70",
+                      i === terminalLogs.length - 1 && "animate-pulse"
+                    )}
+                  >
+                    <span className="text-terminal-orange/40 mr-2">&gt;</span>
+                    {log}
+                    {i === terminalLogs.length - 1 && <span className="animate-blink ml-1">_</span>}
+                  </div>
+                ))}
+                {terminalLogs.length === 0 && (
+                  <div className="text-terminal-orange/40 animate-pulse">
+                    <span className="mr-2">&gt;</span>
+                    Initializing network feed...<span className="animate-blink">_</span>
+                  </div>
+                )}
               </div>
             </Card>
           </div>
