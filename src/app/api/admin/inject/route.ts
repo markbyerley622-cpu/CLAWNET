@@ -12,15 +12,6 @@ import type { AgentRole } from "@/types";
  */
 export async function POST(request: NextRequest) {
   try {
-    // Verify admin key
-    const adminKey = request.headers.get("x-admin-key");
-    if (adminKey !== process.env.ADMIN_DEV_KEY) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
     const body = await request.json();
     const { type, count = 1 } = body;
 
